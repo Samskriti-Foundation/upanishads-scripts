@@ -102,8 +102,9 @@ def process_sutra_data(entry: dict, token: str):
 
 
 def main():
-    username = os.getenv("USERNAME", "")
+    username = os.getenv("EMAIL", "")
     password = os.getenv("PASSWORD", "")
+    print(username, password)
     token = get_access_token(f"{BASE_URL}/auth/login", username, password)
     if token is None:
         print("Exiting due to failure in obtaining access token.")
