@@ -60,6 +60,49 @@ def add_entry(url_suffix: str, data: dict, token: str):
         pprint(response_data)
 
 
+def add_audio_file(sutra_no: int, mode: str, token: str):
+    """
+    Add audio file for a given sutra number and mode.
+
+    Args:
+        sutra_no: int - The sutra number (-1 to 18)
+        mode: str - Either 'chant' or 'teach_me'
+        token: str - Authentication token
+    """
+    # Determine the file suffix based on mode
+    file_suffix = "A" if mode == "chant" else "B"
+
+    # Construct the file path
+    file_path = f"audio/isha/{sutra_no}_{file_suffix}.mp3"
+
+    # Check if file exists
+    if not os.path.exists(file_path):
+        print(f"Audio file not found: {file_path}")
+        return
+
+    # Prepare the URL - note that mode is now a query parameter
+    url = f"{BASE_URL}/isha/sutras/{sutra_no}/audio"
+
+    # Prepare the files for multipart/form-data
+    files = {"file": ("audio.mp3", open(file_path, "rb"), "audio/mpeg")}
+
+    # Add mode as a query parameter
+    params = {"mode": mode}
+
+    # Make the request
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.post(url, files=files, params=params, headers=headers)
+
+    if response.status_code == 201:
+        print(f"Successfully uploaded audio for sutra {sutra_no} in {mode} mode")
+        return response.json()
+    else:
+        print(f"Failed to upload audio for sutra {sutra_no} in {mode} mode")
+        print(f"Status code: {response.status_code}")
+        print(response.text)
+        return None
+
+
 def process_sutra_data(entry: dict, token: str):
     sutra_no = int(entry.get("sutra_no", ""))
     add_entry(
@@ -99,6 +142,12 @@ def process_sutra_data(entry: dict, token: str):
                 },
                 token,
             )
+
+    # Add audio files
+    # Chant mode
+    add_audio_file(sutra_no, "chant", token)
+    # Teaching mode
+    add_audio_file(sutra_no, "teach_me", token)
 
 
 def main():
