@@ -1,6 +1,5 @@
 import os
 from enum import Enum
-from operator import truediv
 from pprint import pprint
 
 import pandas as pd
@@ -10,11 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_URL = os.getenv("API_URL")
-CSV_PATH = os.getenv("CSV_PATH")
-UPANISHAD = os.getenv("UPANISHAD_NAME")
-UPANISHAD_DESCRIPTION = os.getenv("UPANISHAD_DESCRIPTION")
-CHAPTER = os.getenv("CHAPTER")
-print(f"read {CSV_PATH} for {UPANISHAD} {UPANISHAD_DESCRIPTION} upanishad chapter {CHAPTER}")
+CSV_PATH = os.getenv("CSV_UPANISHADS")
+UPANISHADS = os.getenv("UPANISHADS")
 
 class Language(str, Enum):
     en = "en"
@@ -90,8 +86,12 @@ def add_entry(url_suffix: str, data: dict, token: str):
         return True
     else: return False
 
+def get_projects():
+    url = f"{BASE_URL}/projects/"
+    response = requests.get(url)
+    return response.json()
 
-def add_audio_file(sutra_no: int, mode: str, token: str):
+def add_audio_file(upanishad: str, chapter: int, sutra_no: int, mode: str, token: str):
     """
     Add audio file for a given sutra number and mode.
 
@@ -104,7 +104,8 @@ def add_audio_file(sutra_no: int, mode: str, token: str):
     file_suffix = "A" if mode == "chant" else "B"
 
     # Construct the file path
-    file_path = f"audio/{UPANISHAD}/{sutra_no}_{file_suffix}.mp3"
+    if upanishad == 'isha': file_path = f"audio/{upanishad}/{sutra_no}_{file_suffix}.mp3"
+    else: file_path = f"audio/{upanishad}/{chapter}/{sutra_no}_{file_suffix}.mp3"
 
     # Check if file exists
     if not os.path.exists(file_path):
@@ -112,7 +113,7 @@ def add_audio_file(sutra_no: int, mode: str, token: str):
         return
 
     # Prepare the URL - note that mode is now a query parameter
-    url = f"{BASE_URL}/{UPANISHAD}/sutras/{UPANISHAD}/0/{sutra_no}/audio"
+    url = f"{BASE_URL}/{upanishad}/sutras/{upanishad}/{chapter}/{sutra_no}/audio"
 
     # Prepare the files for multipart/form-data
     files = {"file": ("audio.mp3", open(file_path, "rb"), "audio/mpeg")}
@@ -133,18 +134,19 @@ def add_audio_file(sutra_no: int, mode: str, token: str):
         print(response.text)
         return None
 
-
 def process_sutra_data(entry: dict, token: str):
     sutra_no = int(entry.get("sutra_no", ""))
+    chapter = int(entry.get("chapter",""))
+    upanishad = str(entry.get("name", "isha"))
     add_entry(
-        f"/{UPANISHAD}/sutras", {"project":{"name":f"{UPANISHAD}"}, "sutra":{"chapter": f"{CHAPTER}", "number": sutra_no, "text": entry.get("sutra", "")}}, token
+        f"/{upanishad}/sutras", {"project":{"name": upanishad}, "sutra":{"chapter": chapter, "number": sutra_no, "text": entry.get("sutra", "")}}, token
     )
 
     # Add transliterations in all languages
     for lang in Language:
         transliteration_text = entry.get(f"transliteration_{lang.value}", "")
         add_entry(
-            f"/{UPANISHAD}/sutras/{UPANISHAD}/{CHAPTER}/{sutra_no}/transliteration",
+            f"/{upanishad}/sutras/{upanishad}/{chapter}/{sutra_no}/transliteration",
             {"language": lang, "text": transliteration_text},
             token,
         )
@@ -153,7 +155,7 @@ def process_sutra_data(entry: dict, token: str):
     for lang in Language:
         meaning_text = entry.get(f"meaning_{lang.value}", "")
         add_entry(
-            f"/{UPANISHAD}/sutras/{UPANISHAD}/{CHAPTER}/{sutra_no}/meaning",
+            f"/{upanishad}/sutras/{upanishad}/{chapter}/{sutra_no}/meaning",
             {"language": lang, "text": meaning_text},
             token,
         )
@@ -165,7 +167,7 @@ def process_sutra_data(entry: dict, token: str):
                 f"tellmemore_{lang.value}_{philosophy.value}", ""
             )
             add_entry(
-                f"/{UPANISHAD}/sutras/{UPANISHAD}/{CHAPTER}/{sutra_no}/interpretation",
+                f"/{upanishad}/sutras/{upanishad}/{chapter}/{sutra_no}/interpretation",
                 {
                     "language": lang,
                     "text": interpretation_text,
@@ -174,14 +176,12 @@ def process_sutra_data(entry: dict, token: str):
                 token,
             )
 
-
-    if UPANISHAD=='isha':
+    if upanishad=='isha':
         # Add audio files
         # Chant mode
-        add_audio_file(sutra_no, "chant", token)
+        add_audio_file(upanishad, chapter, sutra_no, "chant", token)
         # Teaching mode
-        add_audio_file(sutra_no, "teach_me", token)
-
+        add_audio_file(upanishad, chapter, sutra_no, "teach_me", token)
 
 def main():
     token = get_access_token()
@@ -189,13 +189,20 @@ def main():
         print("Exiting due to failure in obtaining access token.")
         return
 
-    # add project with description if it does not exist
-    if add_entry(f"/projects?name={UPANISHAD}&description={UPANISHAD_DESCRIPTION}", {"name":f"{UPANISHAD}", "description":f"{UPANISHAD_DESCRIPTION}"}, token):
-        # Load CSV data, replacing NaN values with empty strings
-        df = pd.read_csv(CSV_PATH).fillna("")
-        for entry in df.to_dict(orient="records"):
-            # print(f"processing {entry}")
-            process_sutra_data(entry, token)
+    projects = get_projects()
+    # print(f'list {projects}')
+
+    for item in UPANISHADS.split(','):
+        name, description = item.split('/')
+        # add project with description if it does not exist
+        projectnames = []
+        for item in projects: projectnames.append(item['name'])
+        # print(f'names {projectnames}')
+        if name not in projectnames: add_entry(f"/projects?name={name}&description={description}", {"name":f"{name}", "description":f"{description}"}, token)
+    # Load CSV data, replacing NaN values with empty strings
+    df = pd.read_csv(CSV_PATH).fillna("")
+    for entry in df.to_dict(orient="records"):
+        process_sutra_data(entry, token)
 
 
 if __name__ == "__main__":
