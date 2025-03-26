@@ -13,6 +13,7 @@ CSV_PATH = os.getenv("CSV_UPANISHADS")
 UPANISHADS = os.getenv("UPANISHADS")
 
 class Language(str, Enum):
+    sa = "sa"
     en = "en"
     kn = "kn"
     ta = "ta"
@@ -126,17 +127,17 @@ def add_audio_file(upanishad: str, chapter: int, sutra_no: int, mode: str, token
     response = requests.post(url, files=files, params=params, headers=headers)
 
     if response.status_code == 201:
-        print(f"Successfully uploaded audio for sutra {sutra_no} in {mode} mode")
+        print(f"Successfully uploaded audio for upanishad {upanishad} chapter {chapter} sutra {sutra_no} in {mode} mode")
         return response.json()
     else:
-        print(f"Failed to upload audio for sutra {sutra_no} in {mode} mode")
+        print(f"Failed to upload audio for upanishad {upanishad} chapter {chapter} sutra {sutra_no} in {mode} mode")
         print(f"Status code: {response.status_code}")
         print(response.text)
         return None
 
 def process_sutra_data(entry: dict, token: str):
-    sutra_no = int(entry.get("sutra_no", ""))
-    chapter = int(entry.get("chapter",""))
+    sutra_no = int(entry.get("sutra_no", "0"))
+    chapter = int(entry.get("chapter","0"))
     upanishad = str(entry.get("name", "isha"))
     add_entry(
         f"/{upanishad}/sutras", {"project":{"name": upanishad}, "sutra":{"chapter": chapter, "number": sutra_no, "text": entry.get("sutra", "")}}, token
@@ -159,6 +160,17 @@ def process_sutra_data(entry: dict, token: str):
             {"language": lang, "text": meaning_text},
             token,
         )
+        # for lang in Language:  # 🔥 Fix: Loop through all languages, not just Sanskrit
+        for philosophy in Philosophy:
+            bhashyam_text = entry.get(f"bhashyam_sa_{philosophy.value}", "")
+            if bhashyam_text:
+                add_entry(
+                    f"/{upanishad}/sutras/{upanishad}/{chapter}/{sutra_no}/bhashyam",
+                    {"language": "sa", "text": bhashyam_text, "philosophy": philosophy.value},
+                    token,
+                )
+            else:
+                print(f"Bhashyam not found for {upanishad} chapter {chapter} Sutra {sutra_no} (sa - {philosophy.value})")
 
     # Add interpretations for all language and philosophy combinations
     for lang in Language:
@@ -176,12 +188,12 @@ def process_sutra_data(entry: dict, token: str):
                 token,
             )
 
-    if upanishad=='isha':
-        # Add audio files
-        # Chant mode
-        add_audio_file(upanishad, chapter, sutra_no, "chant", token)
-        # Teaching mode
-        add_audio_file(upanishad, chapter, sutra_no, "teach_me", token)
+    # if upanishad=='isha':
+    # Add audio files
+    # Chant mode
+    add_audio_file(upanishad, chapter, sutra_no, "chant", token)
+    # Teaching mode
+    add_audio_file(upanishad, chapter, sutra_no, "teach_me", token)
 
 def main():
     token = get_access_token()
@@ -201,9 +213,7 @@ def main():
         if name not in projectnames: add_entry(f"/projects?name={name}&description={description}", {"name":f"{name}", "description":f"{description}"}, token)
     # Load CSV data, replacing NaN values with empty strings
     df = pd.read_csv(CSV_PATH).fillna("")
-    for entry in df.to_dict(orient="records"):
-        process_sutra_data(entry, token)
-
-
+    for entry in df.to_dict(orient="records"): process_sutra_data(entry, token)
+    
 if __name__ == "__main__":
     main()

@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-csv_ins_str = os.getenv("CSV_INS")  # Get the combined CSV input string
-csv_out = os.getenv("CSV_OUT")
+csv_ins_str = os.getenv("CSV_INS_WITH_CHAPTER")  # Get the combined CSV input string
+csv_out = os.getenv("CSV_UPANISHADS")
 try:
     with open(csv_out, 'w', newline='', encoding='utf-8') as outfile:
         writer = csv.writer(outfile)
@@ -21,8 +21,11 @@ try:
                 with open(csv_in, 'r', newline='', encoding='utf-8') as infile:
                     reader = csv.reader(infile)
                     next(reader) # skip header from input file
+                    i=0
                     for row in reader:
-                        new_row = [upanishad_name, chapter] + row
+                        if upanishad_name == 'isha': new_row = [upanishad_name, chapter] + row
+                        else: new_row = [upanishad_name] + row[:6] + row[9:12] + row[18:26] + row[15:18]
+                        i += 1;lr = len(row);lnr = len(new_row); print(f'{upanishad_name} {i} row {lr} new {lnr}')
                         writer.writerow(new_row)
             except FileNotFoundError:
                 print(f"Error: Input file '{csv_in}' not found.")
